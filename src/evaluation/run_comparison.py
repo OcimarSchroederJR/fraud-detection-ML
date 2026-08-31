@@ -3,6 +3,12 @@
 estratégias de balanceamento do passo 6, nas divisões temporal e
 aleatória do passo 7.
 
+O limiar de decisão que minimiza o custo esperado (passo 9) é escolhido
+sobre um conjunto de validação separado do teste — nunca sobre o
+próprio teste, o que vazaria informação da avaliação final para uma
+decisão de modelo. PR-AUC e as métricas finais são sempre calculadas
+sobre o teste, usando o limiar já fixado na validação.
+
 Uso:
     python -m src.evaluation.run_comparison
 """
@@ -16,7 +22,7 @@ from src.evaluation.latency import measure_single_transaction_latency
 from src.evaluation.metrics import best_threshold_by_cost, expected_cost, pr_auc
 from src.ingestion.load_data import load_config, load_raw_transactions
 from src.preprocessing.schema import validate_transactions
-from src.preprocessing.split import random_split, temporal_split
+from src.preprocessing.split import random_train_val_test_split, temporal_train_val_test_split
 from src.train.models import build_isolation_forest, build_lightgbm, build_logistic_regression
 
 FEATURE_COLUMNS = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
@@ -51,20 +57,19 @@ def _precision_recall_at_threshold(y_true, y_pred):
     return precision, recall
 
 
-def evaluate_supervised(model, X_test, y_test, cost_config, latency_sample):
-    y_scores = model.predict_proba(X_test)[:, 1]
+def _score_and_evaluate(y_val, y_val_scores, y_test, y_test_scores, cost_config, model, latency_sample, predict_fn=None):
     threshold, _ = best_threshold_by_cost(
-        y_test,
-        y_scores,
+        y_val,
+        y_val_scores,
         false_negative_cost=cost_config["false_negative_cost"],
         false_positive_cost=cost_config["false_positive_cost"],
     )
-    y_pred = (y_scores >= threshold).astype(int)
+    y_pred = (y_test_scores >= threshold).astype(int)
     precision, recall = _precision_recall_at_threshold(y_test, y_pred)
-    latency = measure_single_transaction_latency(model, latency_sample)
+    latency = measure_single_transaction_latency(model, latency_sample, predict_fn=predict_fn)
 
     return {
-        "pr_auc": pr_auc(y_test, y_scores),
+        "pr_auc": pr_auc(y_test, y_test_scores),
         "threshold": float(threshold),
         "precision_at_threshold": precision,
         "recall_at_threshold": recall,
@@ -74,35 +79,31 @@ def evaluate_supervised(model, X_test, y_test, cost_config, latency_sample):
     }
 
 
-def evaluate_isolation_forest(X_train_legit, X_test, y_test, config, latency_sample):
+def evaluate_supervised(model, X_val, y_val, X_test, y_test, cost_config, latency_sample):
+    y_val_scores = model.predict_proba(X_val)[:, 1]
+    y_test_scores = model.predict_proba(X_test)[:, 1]
+    return _score_and_evaluate(y_val, y_val_scores, y_test, y_test_scores, cost_config, model, latency_sample)
+
+
+def evaluate_isolation_forest(X_train_legit, X_val, y_val, X_test, y_test, config, latency_sample):
     """Treina só sobre transações legítimas e trata o score de anomalia
     invertido como proxy da probabilidade de fraude."""
     model = build_isolation_forest(config)
     model.fit(X_train_legit)
 
-    raw_scores = -model.decision_function(X_test)
-    y_scores = (raw_scores - raw_scores.min()) / (raw_scores.max() - raw_scores.min())
+    y_val_scores = -model.decision_function(X_val)
+    y_test_scores = -model.decision_function(X_test)
 
-    cost_config = config["cost_model"]
-    threshold, _ = best_threshold_by_cost(
-        y_test, y_scores, false_negative_cost=cost_config["false_negative_cost"], false_positive_cost=cost_config["false_positive_cost"]
+    return _score_and_evaluate(
+        y_val,
+        y_val_scores,
+        y_test,
+        y_test_scores,
+        config["cost_model"],
+        model,
+        latency_sample,
+        predict_fn=lambda m, row: m.decision_function(row),
     )
-    y_pred = (y_scores >= threshold).astype(int)
-    precision, recall = _precision_recall_at_threshold(y_test, y_pred)
-
-    latency = measure_single_transaction_latency(
-        model, latency_sample, predict_fn=lambda m, row: m.decision_function(row)
-    )
-
-    return {
-        "pr_auc": pr_auc(y_test, y_scores),
-        "threshold": float(threshold),
-        "precision_at_threshold": precision,
-        "recall_at_threshold": recall,
-        "expected_cost": expected_cost(y_test, y_pred, cost_config["false_negative_cost"], cost_config["false_positive_cost"]),
-        "latency_p95_ms": latency["p95_ms"],
-        "latency_p99_ms": latency["p99_ms"],
-    }
 
 
 def run(config_path=None, latency_sample_size: int = 500) -> pd.DataFrame:
@@ -110,9 +111,13 @@ def run(config_path=None, latency_sample_size: int = 500) -> pd.DataFrame:
     df = load_raw_transactions(config_path) if config_path else load_raw_transactions()
     df = validate_transactions(df)
 
+    split_kwargs = {
+        "test_size": config["split"]["test_size"],
+        "validation_size": config["split"]["validation_size"],
+    }
     splits = {
-        "temporal": temporal_split(df, time_column=config["split"]["time_column"], test_size=config["split"]["test_size"]),
-        "aleatoria": random_split(df, target_column=config["split"]["target_column"], test_size=config["split"]["test_size"]),
+        "temporal": temporal_train_val_test_split(df, time_column=config["split"]["time_column"], **split_kwargs),
+        "aleatoria": random_train_val_test_split(df, target_column=config["split"]["target_column"], **split_kwargs),
     }
 
     model_builders = {
@@ -122,8 +127,9 @@ def run(config_path=None, latency_sample_size: int = 500) -> pd.DataFrame:
     strategies = ["class_weight", "smote"]
 
     rows = []
-    for split_name, (train_df, test_df) in splits.items():
+    for split_name, (train_df, val_df, test_df) in splits.items():
         X_train, y_train = train_df[FEATURE_COLUMNS], train_df[TARGET_COLUMN]
+        X_val, y_val = val_df[FEATURE_COLUMNS], val_df[TARGET_COLUMN]
         X_test, y_test = test_df[FEATURE_COLUMNS], test_df[TARGET_COLUMN]
         latency_sample = X_test.sample(n=min(latency_sample_size, len(X_test)), random_state=42)
 
@@ -131,11 +137,11 @@ def run(config_path=None, latency_sample_size: int = 500) -> pd.DataFrame:
             for strategy in strategies:
                 model = builder(config)
                 model = _fit_supervised(model, X_train, y_train, strategy, config)
-                metrics = evaluate_supervised(model, X_test, y_test, config["cost_model"], latency_sample)
+                metrics = evaluate_supervised(model, X_val, y_val, X_test, y_test, config["cost_model"], latency_sample)
                 rows.append({"split": split_name, "model": model_name, "balancing": strategy, **metrics})
 
         X_train_legit = X_train[y_train == 0]
-        iso_metrics = evaluate_isolation_forest(X_train_legit, X_test, y_test, config, latency_sample)
+        iso_metrics = evaluate_isolation_forest(X_train_legit, X_val, y_val, X_test, y_test, config, latency_sample)
         rows.append(
             {"split": split_name, "model": "isolation_forest", "balancing": "treinado só com legítimas", **iso_metrics}
         )
