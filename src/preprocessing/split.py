@@ -27,3 +27,34 @@ def random_split(df: pd.DataFrame, target_column: str = "Class", test_size: floa
         random_state=random_state,
     )
     return train_df.reset_index(drop=True), test_df.reset_index(drop=True)
+
+
+def temporal_train_val_test_split(
+    df: pd.DataFrame, time_column: str = "Time", test_size: float = 0.2, validation_size: float = 0.2
+):
+    """Divisão temporal em três partes: treino, validação e teste.
+
+    A validação existe para escolher o limiar de decisão (custo esperado
+    por transação) sem usar o próprio conjunto de teste nessa escolha,
+    o que vazaria informação do teste para uma decisão de modelo.
+    """
+    train_full_df, test_df = temporal_split(df, time_column=time_column, test_size=test_size)
+    train_df, val_df = temporal_split(train_full_df, time_column=time_column, test_size=validation_size)
+    return train_df, val_df, test_df
+
+
+def random_train_val_test_split(
+    df: pd.DataFrame,
+    target_column: str = "Class",
+    test_size: float = 0.2,
+    validation_size: float = 0.2,
+    random_state: int = 42,
+):
+    """Divisão aleatória estratificada em três partes: treino, validação e teste."""
+    train_full_df, test_df = random_split(
+        df, target_column=target_column, test_size=test_size, random_state=random_state
+    )
+    train_df, val_df = random_split(
+        train_full_df, target_column=target_column, test_size=validation_size, random_state=random_state
+    )
+    return train_df, val_df, test_df
