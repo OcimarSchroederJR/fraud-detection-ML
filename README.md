@@ -1,6 +1,8 @@
 # fraud-detection-ML
 
 [![Testes](https://github.com/OcimarSchroederJR/fraud-detection-ML/actions/workflows/tests.yml/badge.svg)](https://github.com/OcimarSchroederJR/fraud-detection-ML/actions/workflows/tests.yml)
+[![Cobertura](https://img.shields.io/badge/cobertura-79%25-green)](#como-rodar)
+[![Lint](https://img.shields.io/badge/lint-ruff-blueviolet)](ruff.toml)
 
 Detecção de fraude em transações de cartão de crédito, com engenharia de pipeline para dados extremamente desbalanceados.
 
@@ -74,8 +76,17 @@ pip install -r requirements.txt
 # testes automatizados
 pytest
 
+# testes com relatório de cobertura
+pytest --cov=src --cov-report=term-missing
+
+# lint
+ruff check .
+
 # retreina o modelo do zero (opcional — já vem um treinado em models/, requer data/raw/creditcard.csv)
 python -m src.train.train_pipeline --model lightgbm
+
+# idem, ajustando hiperparâmetros do LightGBM com Optuna antes do treino final (passo 10)
+python -m src.train.train_pipeline --model lightgbm --tune --n-trials 15
 
 # matriz de comparação entre modelos e estratégias de balanceamento (passo 8)
 python -m src.evaluation.run_comparison
@@ -100,9 +111,9 @@ streamlit run dashboard/app.py
 - [x] Estratégias de balanceamento: ponderação de classe e SMOTE (Passo 6)
 - [x] Modelos: regressão logística, LightGBM e Isolation Forest (Passo 8)
 - [x] Métricas para classes desbalanceadas: PR-AUC e custo esperado por transação (Passo 9)
-- [x] Busca de hiperparâmetros com Optuna (Passo 10)
+- [x] Busca de hiperparâmetros com Optuna, conectada ao treino final via `--tune` (Passo 10)
 - [x] Medição de latência de inferência transação a transação (Passo 11)
-- [x] Serviço de inferência (FastAPI) e empacotamento (Docker) (Passo 11)
+- [x] Serviço de inferência (FastAPI) e empacotamento (Docker), build e execução testados de ponta a ponta no CI (Passo 11)
 - [x] Notebook de análise exploratória (Passo 5)
 - [x] Interpretabilidade via SHAP (Passo 14)
 - [x] Discussão de monitoramento e deriva de conceito, sem implementação completa (Passo 12) — [`docs/monitoramento_deriva_conceito.md`](docs/monitoramento_deriva_conceito.md)
@@ -111,3 +122,4 @@ streamlit run dashboard/app.py
 - [x] CI no GitHub Actions rodando a suíte de testes a cada push/PR
 - [x] Dashboard interativo em Streamlit — [`dashboard/app.py`](dashboard/app.py)
 - [x] Modelo treinado versionado com metadados de reprodutibilidade — [`models/model_metadata.json`](models/model_metadata.json)
+- [x] Lint (ruff) e cobertura de testes no CI
