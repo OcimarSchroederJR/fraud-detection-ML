@@ -23,3 +23,34 @@ jobs:
 
       - name: Roda os testes
         run: pytest
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Builda a imagem de serving
+        run: docker build -t fraud-detection-ml:ci .
+
+      - name: Sobe o container com o modelo versionado
+        run: docker run -d --name fraud-api -p 8000:8000 -v "${{ github.workspace }}/models:/app/models:ro" fraud-detection-ml:ci
+
+      - name: Aguarda o serviço subir
+        run: |
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          echo "Serviço não respondeu a tempo" && docker logs fraud-api && exit 1
+
+      - name: Testa /predict de ponta a ponta
+        run: |
+          response=$(curl -sf -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{"Time":0.0,"Amount":149.62,"V1":-1.36,"V2":-0.07,"V3":2.54,"V4":1.38,"V5":-0.34,"V6":0.46,"V7":0.24,"V8":0.10,"V9":0.36,"V10":0.09,"V11":-0.55,"V12":-0.62,"V13":-0.99,"V14":-0.31,"V15":1.47,"V16":-0.47,"V17":0.21,"V18":0.03,"V19":0.40,"V20":0.25,"V21":-0.02,"V22":0.28,"V23":-0.11,"V24":0.07,"V25":0.13,"V26":-0.19,"V27":0.13,"V28":-0.02}')
+          echo "$response"
+          echo "$response" | grep -q "fraud_probability"
+
+      - name: Logs do container (para depuração em caso de falha)
+        if: failure()
+        run: docker logs fraud-api
