@@ -10,6 +10,9 @@ paths:
 split:
   # fração dos dados (ordenados por tempo) reservada para teste
   test_size: 0.2
+  # fração do restante (após retirar o teste) reservada para validação,
+  # usada só para escolher o limiar de custo mínimo sem tocar no teste
+  validation_size: 0.2
   time_column: "Time"
   target_column: "Class"
 
