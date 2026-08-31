@@ -22,6 +22,8 @@ mlartifacts/
 *.pkl
 *.joblib
 *.onnx
+# exceção: o modelo baseline versionado, para reprodutibilidade sem precisar treinar
+!models/model.joblib
 
 # Environment / secrets
 .env

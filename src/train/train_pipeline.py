@@ -7,10 +7,15 @@ Executável como script isolado:
 """
 
 import argparse
+import json
+import subprocess
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
 import mlflow
+import sklearn
 
 from src.balancing.strategies import apply_smote, class_weight_dict
 from src.evaluation.metrics import expected_cost, pr_auc
@@ -21,6 +26,15 @@ from src.train.models import build_lightgbm, build_logistic_regression
 
 FEATURE_COLUMNS_TEMPLATE = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
 TARGET_COLUMN = "Class"
+
+
+def _current_git_commit():
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[2], text=True
+        ).strip()
+    except Exception:
+        return None
 
 
 def run(config_path: Path = None, model_name: str = "lightgbm"):
@@ -80,6 +94,36 @@ def run(config_path: Path = None, model_name: str = "lightgbm"):
     model_output_dir = Path(config["paths"]["model_output_dir"])
     model_output_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, model_output_dir / "model.joblib")
+
+    versions = {"python": sys.version.split()[0], "scikit_learn": sklearn.__version__}
+    if model_name == "lightgbm":
+        import lightgbm
+
+        versions["lightgbm"] = lightgbm.__version__
+
+    metadata = {
+        "model_name": model_name,
+        "balancing_strategy": strategy,
+        "feature_order": FEATURE_COLUMNS_TEMPLATE,
+        "hyperparameters": {k: str(v) for k, v in model.get_params().items()},
+        "split": {
+            "type": "temporal",
+            "time_column": config["split"]["time_column"],
+            "test_size": config["split"]["test_size"],
+            "threshold_used_for_expected_cost": 0.5,
+        },
+        "metrics_on_test": metrics,
+        "dataset": {
+            "source": "Kaggle - mlg-ulb/creditcardfraud",
+            "n_rows": int(len(df)),
+            "n_fraud": int(df[TARGET_COLUMN].sum()),
+        },
+        "trained_at_utc": datetime.now(timezone.utc).isoformat(),
+        "git_commit": _current_git_commit(),
+        "library_versions": versions,
+    }
+    with open(model_output_dir / "model_metadata.json", "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2, default=str)
 
     return metrics
 
