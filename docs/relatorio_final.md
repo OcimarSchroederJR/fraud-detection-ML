@@ -1,6 +1,6 @@
 # Detecção de fraude em transações de cartão de crédito com engenharia de pipeline para dados extremamente desbalanceados
 
-> Rascunho estrutural do relatório final (Passo 16 do guia). As seções de Introdução, Revisão de Literatura e Dados e Método já estão preenchidas com o que foi de fato decidido e implementado no projeto. As seções de Resultados, Discussão e Conclusão dependem de rodar o pipeline de treino sobre o dataset real (`data/raw/creditcard.csv`, baixado do Kaggle) e estão marcadas como **TODO** — não devem ser preenchidas com números inventados.
+> Relatório final (Passo 16 do guia), preenchido com os resultados reais de `python -m src.evaluation.run_comparison` e `python -m src.evaluation.run_shap_report` sobre o dataset completo (`data/raw/creditcard.csv`, baixado do Kaggle). Os dados brutos por trás das tabelas estão em [`results/`](../results/).
 
 ## 1. Introdução
 
@@ -50,16 +50,43 @@ O tempo de inferência é medido transação a transação (`src/evaluation/late
 
 ## 4. Resultados
 
-**TODO** — preencher após rodar `python -m src.train.train_pipeline` sobre `data/raw/creditcard.csv` real. Organizar como uma tabela única cruzando modelo × estratégia de balanceamento × métrica (PR-AUC, precisão e recall no limiar escolhido, custo esperado por transação, latência p95/p99), para as divisões temporal e aleatória.
+Resultados obtidos rodando `python -m src.evaluation.run_comparison` sobre o dataset real (`data/raw/creditcard.csv`, 284.807 transações), com as premissas de custo ilustrativas de `config/config.yaml` (falso negativo = 120, falso positivo = 5). Tabela completa em [`results/comparacao_modelos.csv`](../results/comparacao_modelos.csv); cada célula de limiar já reflete o limiar que minimiza o custo esperado (Seção 3.6), não o padrão de 0,5.
+
+O conjunto de teste tem 56.962 transações em ambas as divisões, com 75 fraudes na divisão temporal (prevalência 0,132%) e 98 na aleatória (prevalência 0,172%) — ou seja, um classificador aleatório teria PR-AUC próximo desses valores de prevalência, não de zero.
+
+| Split | Modelo | Balanceamento | PR-AUC | Limiar | Precisão | Recall | Custo esperado/transação | Latência p95 (ms) | Latência p99 (ms) |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Temporal | Regressão logística | ponderação de classe | 0,737 | 0,919 | 0,443 | 0,827 | 0,0342 | 0,14 | 0,16 |
+| Temporal | Regressão logística | SMOTE | 0,806 | 0,973 | 0,714 | 0,800 | 0,0337 | 0,13 | 0,15 |
+| Temporal | LightGBM | ponderação de classe | 0,809 | 0,0007 | 0,549 | 0,827 | 0,0319 | 1,28 | 1,35 |
+| Temporal | LightGBM | SMOTE | 0,802 | 0,777 | 0,879 | 0,773 | 0,0365 | 1,48 | 2,25 |
+| Temporal | Isolation Forest | treinado só com legítimas | 0,034 | 0,510 | 0,062 | 0,453 | 0,1317 | 4,39 | 4,94 |
+| Aleatória | Regressão logística | ponderação de classe | 0,726 | 0,982 | 0,475 | 0,888 | 0,0316 | 0,14 | 0,16 |
+| Aleatória | Regressão logística | SMOTE | 0,730 | 0,954 | 0,512 | 0,878 | 0,0325 | 0,13 | 0,14 |
+| Aleatória | LightGBM | ponderação de classe | 0,858 | 0,0018 | 0,726 | 0,867 | 0,0302 | 1,27 | 1,30 |
+| Aleatória | LightGBM | SMOTE | 0,843 | 0,108 | 0,694 | 0,857 | 0,0327 | 1,50 | 2,21 |
+| Aleatória | Isolation Forest | treinado só com legítimas | 0,128 | 0,543 | 0,092 | 0,694 | 0,1220 | 4,09 | 4,81 |
+
+Interpretabilidade (SHAP, LightGBM, split temporal, amostra de 5.000 transações de teste — `results/shap_importance.csv`, via `python -m src.evaluation.run_shap_report`): as 3 variáveis mais importantes por média do valor absoluto de SHAP são `V4` (0,758), `V1` (0,494) e `V8` (0,492). `Amount`, a única variável monetária interpretável, aparece em 9º lugar de 30 (0,284); `Time` aparece em 12º (0,264) — nem entre as mais relevantes, nem irrelevantes.
 
 ## 5. Discussão
 
-**TODO** — discutir, com os números da Seção 4: (a) a diferença de desempenho entre a divisão temporal e a aleatória; (b) qual estratégia de balanceamento generalizou melhor e se isso confirma ou contradiz as suposições implícitas listadas na Seção 3.4; (c) os valores de SHAP (`src/evaluation/interpretability.py`) sobre o modelo LightGBM, verificando se `Amount` e `Time` — as únicas variáveis interpretáveis — aparecem entre as mais relevantes; (d) diferença de custo computacional entre os modelos frente à diferença de desempenho preditivo.
+**Divisão temporal vs. aleatória**: o LightGBM com ponderação de classe caiu de PR-AUC 0,858 (aleatória) para 0,809 (temporal), uma queda de ~6%. A regressão logística com SMOTE caiu de 0,730 para 0,806 — na verdade *subiu* na divisão temporal, o que sugere que o efeito de qual fração específica das 492 fraudes cai no teste pesa mais do que um efeito sistemático de deriva dentro dessa janela de só dois dias. Ainda assim, o padrão dominante (LightGBM, os dois melhores resultados de PR-AUC do experimento) é de queda sob a divisão temporal, consistente com a expectativa do guia de que a divisão aleatória tende a ser artificialmente otimista.
 
-Independentemente dos números, os seguintes pontos qualitativos já estão estabelecidos e devem constar nesta seção:
+**Estratégias de balanceamento**: LightGBM com ponderação de classe teve o melhor PR-AUC nas duas divisões (0,809 e 0,858), superando SMOTE (0,802 e 0,843) — uma diferença pequena, mas consistente nas duas divisões. Isso é compatível com a suposição da Seção 3.4 de que a ponderação de classe, por não alterar a geometria dos dados, generaliza de forma pelo menos tão robusta quanto o SMOTE neste dataset. Já para a regressão logística, SMOTE venceu com folga na divisão temporal (0,806 vs. 0,737) — um modelo linear parece se beneficiar mais de ver exemplos sintéticos explícitos da classe minoritária do que de um ajuste de custo. Não há uma estratégia que domine para os dois modelos, o que já é, em si, um resultado relevante: a escolha de balanceamento não pode ser feita independentemente da escolha de modelo.
 
-- A anonimização por PCA resolve a questão de privacidade dos dados, mas impede interpretação de negócio direta sobre o que o modelo aprendeu, além do que os valores de SHAP permitem inferir indiretamente.
-- A escolha do limiar de decisão (Seção 3.6) não é uma decisão puramente técnica: falsos positivos recaem de forma desigual sobre clientes que dependem mais do uso do cartão no dia a dia, o que é uma decisão de produto com consequências distributivas reais, não apenas um parâmetro a otimizar.
+**Isolation Forest como terceira via**: PR-AUC de 0,034 (temporal) e 0,128 (aleatória) — muito acima do nível de um classificador aleatório (≈0,0013 e ≈0,0017, a prevalência real de cada conjunto de teste), mas seis a oito vezes pior que qualquer combinação supervisionada. Isso confirma, com dados, a suposição levantada na Seção 3.4: fraude neste dataset não é bem descrita apenas como "um padrão raro e diferente do normal" — ela tem estrutura interna própria que um classificador supervisionado consegue aprender e a detecção de anomalia não-supervisionada não captura tão bem. Vale notar que o Isolation Forest teve o recall mais baixo entre os modelos na divisão temporal (0,453) combinado com a pior precisão (0,062), o pior dos dois mundos.
+
+**Interpretabilidade**: nem `Amount` nem `Time` dominam o ranking de SHAP, mas ambas aparecem em posições medianas (9ª e 12ª de 30) em vez de no fim da lista — sugerindo que o valor da transação e o momento em que ela ocorre carregam algum sinal preditivo, mas o essencial da decisão do modelo vem das componentes anonimizadas (`V4`, `V1`, `V8`, `V14`, `V12`), que não podem ser interpretadas em termos de negócio.
+
+**Latência**: a regressão logística é a mais rápida (~0,13–0,14 ms p95), o LightGBM é cerca de 10x mais lento (~1,3–1,5 ms p95) e o Isolation Forest é o mais lento de todos (~4,1–4,4 ms p95), mais de 30x a latência da regressão logística. Essa diferença de custo computacional é maior do que a diferença de desempenho preditivo entre regressão logística e LightGBM (poucos pontos de PR-AUC), exatamente o ponto que o guia antecipa como contraintuitivo para quem vem de uma formação puramente de ciência de dados: em um cenário de latência crítica, a regressão logística com SMOTE (PR-AUC 0,806 na divisão temporal, a 0,13 ms) pode ser uma escolha de produto mais defensável do que o LightGBM (PR-AUC 0,809, a 1,28 ms), apesar do PR-AUC quase idêntico.
+
+**Custo esperado por transação**: sob as premissas ilustrativas de custo (falso negativo = 120, falso positivo = 5), o menor custo esperado entre os modelos supervisionados foi do LightGBM com ponderação de classe na divisão aleatória (0,0302/transação) e na temporal (0,0319/transação) — mas as diferenças entre as quatro combinações supervisionadas são pequenas (0,030 a 0,037), muito menores que a diferença de custo do Isolation Forest (0,122–0,132, cerca de 4x pior). Isso reforça que, entre os modelos supervisionados, a escolha de balanceamento pesa menos no resultado final do que a escolha entre usar ou não um classificador supervisionado.
+
+Independentemente dos números, os seguintes pontos qualitativos permanecem válidos:
+
+- A anonimização por PCA resolve a questão de privacidade dos dados, mas impede interpretação de negócio direta sobre o que o modelo aprendeu, além do que os valores de SHAP permitem inferir indiretamente — e mesmo esses valores apontam para componentes sem significado de negócio conhecido.
+- A escolha do limiar de decisão (Seção 3.6) não é uma decisão puramente técnica: falsos positivos recaem de forma desigual sobre clientes que dependem mais do uso do cartão no dia a dia, o que é uma decisão de produto com consequências distributivas reais, não apenas um parâmetro a otimizar. Os limiares ótimos encontrados variam bastante entre modelos (de 0,0007 a 0,98), o que por si só mostra por que usar cegamente 0,5 seria inadequado.
 
 ## 6. Limitações
 
@@ -67,7 +94,16 @@ O dataset cobre apenas dois dias de um único mercado europeu em 2013, o que lim
 
 ## 7. Conclusão
 
-**TODO** — resumir, à luz dos resultados da Seção 4, se a pergunta de pesquisa da Seção 1 foi respondida: existe uma combinação de modelo e estratégia de balanceamento que atinge um recall operacionalmente útil, com falsos positivos e latência dentro de limites aceitáveis? Apontar próximos passos (ex.: implementação do monitoramento de deriva de conceito, validação em um segundo dataset como o IEEE-CIS Fraud Detection).
+A pergunta de pesquisa da Seção 1 pede um classificador que equilibre recall alto, precisão suficiente para não gerar atrito excessivo, e latência compatível com autorização em tempo real. Nenhuma combinação testada maximiza as três dimensões simultaneamente, mas os resultados apontam dois candidatos plausíveis, dependendo de qual restrição pesa mais:
+
+- Se o orçamento de latência é apertado (ex.: sub-milissegundo), a **regressão logística com SMOTE** entrega PR-AUC 0,806 na divisão temporal com recall de 0,80 e latência p95 de 0,13 ms — o melhor equilíbrio entre desempenho e velocidade encontrado.
+- Se a latência de ~1,3 ms é aceitável, o **LightGBM com ponderação de classe** entrega o melhor PR-AUC (0,809 na divisão temporal, 0,858 na aleatória) e o menor custo esperado por transação sob as premissas ilustrativas adotadas.
+
+O Isolation Forest, apesar de não exigir rótulos de fraude no treino, ficou muito atrás dos modelos supervisionados em todas as métricas, e não é recomendado como abordagem principal para este dataset — a suposição de que fraude é só "anomalia" não se sustentou empiricamente aqui, embora o modelo continue relevante como um sinal complementar de baixo custo de manutenção (não precisa de rótulos atualizados).
+
+Como a divisão temporal produziu resultados sistematicamente piores ou iguais aos da divisão aleatória para o melhor modelo (LightGBM), é razoável esperar alguma degradação adicional em produção real, onde a diferença temporal entre treino e inferência é muito maior do que os poucos minutos ou horas cobertos pela divisão de teste deste dataset de dois dias.
+
+Próximos passos naturais, fora do escopo desta entrega: (a) implementar de fato o monitoramento de deriva de conceito discutido em [`docs/monitoramento_deriva_conceito.md`](monitoramento_deriva_conceito.md), inclusive com o Evidently; (b) validar as mesmas conclusões metodológicas (divisão temporal, comparação de balanceamento, custo por transação) no dataset IEEE-CIS Fraud Detection, mais próximo de um cenário real de engenharia de dados; (c) explorar um ensemble ou uma etapa de recalibração de probabilidade (Dal Pozzolo et al., 2015) para reduzir a lacuna entre o modelo treinado sob balanceamento artificial e o comportamento real em produção.
 
 ## Referências
 
