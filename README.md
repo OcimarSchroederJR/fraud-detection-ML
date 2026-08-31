@@ -35,8 +35,36 @@ config/           # hiperparâmetros e caminhos
 
 ## Fonte de dados
 
-Dataset: [Credit Card Fraud Detection](https://www.kaggle.com/mlg-ulb/creditcardfraud) (ULB Machine Learning Group / Worldline), licença Database Contents License.
+Dataset: [Credit Card Fraud Detection](https://www.kaggle.com/mlg-ulb/creditcardfraud) (ULB Machine Learning Group / Worldline), licença Database Contents License. Baixe o CSV e salve-o em `data/raw/creditcard.csv` antes de rodar o pipeline de treino ou o notebook de análise exploratória.
+
+## Como rodar
+
+```bash
+python -m venv .venv
+source .venv/Scripts/activate  # Windows (Git Bash)
+pip install -r requirements.txt
+
+# testes automatizados
+pytest
+
+# treino do modelo (requer data/raw/creditcard.csv)
+python -m src.train.train_pipeline --model lightgbm
+
+# serviço de inferência
+uvicorn src.serving.api:app --reload
+```
 
 ## Status
 
-Projeto em desenvolvimento inicial.
+- [x] Estrutura do projeto (Passo 4)
+- [x] Validação de schema e divisão temporal/aleatória (Passos 7 e 13)
+- [x] Estratégias de balanceamento: ponderação de classe e SMOTE (Passo 6)
+- [x] Modelos: regressão logística, LightGBM e Isolation Forest (Passo 8)
+- [x] Métricas para classes desbalanceadas: PR-AUC e custo esperado por transação (Passo 9)
+- [x] Busca de hiperparâmetros com Optuna (Passo 10)
+- [x] Medição de latência de inferência transação a transação (Passo 11)
+- [x] Serviço de inferência (FastAPI) e empacotamento (Docker) (Passo 11)
+- [x] Notebook de análise exploratória (Passo 5)
+- [x] Interpretabilidade via SHAP (Passo 14)
+- [ ] Monitoramento e deriva de conceito (Passo 12)
+- [ ] Relatório final (Passo 16)
