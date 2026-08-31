@@ -1,6 +1,6 @@
+from lightgbm import LGBMClassifier
 from sklearn.ensemble import IsolationForest
 from sklearn.linear_model import LogisticRegression
-from lightgbm import LGBMClassifier
 
 from src.train.models import build_isolation_forest, build_lightgbm, build_logistic_regression
 

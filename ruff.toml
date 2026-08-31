@@ -1,0 +1,14 @@
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[lint.isort]
+known-first-party = ["src"]
+
+[lint.per-file-ignores]
+# dashboard/app.py precisa inserir a raiz do projeto no sys.path antes de
+# importar módulos de src/, então os imports não podem ficar todos no topo.
+"dashboard/app.py" = ["E402"]

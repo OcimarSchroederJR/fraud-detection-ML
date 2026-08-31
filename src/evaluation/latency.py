@@ -21,7 +21,9 @@ def measure_single_transaction_latency(model, X, n_repeats: int = 1, predict_fn=
     Retorna um dicionário com média, mediana, p95 e p99, em milissegundos.
     """
     if predict_fn is None:
-        predict_fn = lambda m, row: m.predict_proba(row)
+
+        def predict_fn(m, row):
+            return m.predict_proba(row)
 
     X_values = np.asarray(X)
     latencies_ms = []

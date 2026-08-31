@@ -5,8 +5,7 @@ todas as colunas esperadas estão presentes e que o valor da transação
 nunca é negativo.
 """
 
-import pandera as pa
-from pandera import Column, DataFrameSchema, Check
+from pandera import Check, Column, DataFrameSchema
 
 _V_COLUMNS = {f"V{i}": Column(float, nullable=False) for i in range(1, 29)}
 
