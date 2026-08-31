@@ -50,6 +50,12 @@ pytest
 # treino do modelo (requer data/raw/creditcard.csv)
 python -m src.train.train_pipeline --model lightgbm
 
+# matriz de comparação entre modelos e estratégias de balanceamento (passo 8)
+python -m src.evaluation.run_comparison
+
+# ranking de importância via SHAP (passo 14)
+python -m src.evaluation.run_shap_report
+
 # serviço de inferência
 uvicorn src.serving.api:app --reload
 ```
@@ -66,5 +72,6 @@ uvicorn src.serving.api:app --reload
 - [x] Serviço de inferência (FastAPI) e empacotamento (Docker) (Passo 11)
 - [x] Notebook de análise exploratória (Passo 5)
 - [x] Interpretabilidade via SHAP (Passo 14)
-- [ ] Monitoramento e deriva de conceito (Passo 12)
-- [ ] Relatório final (Passo 16)
+- [x] Discussão de monitoramento e deriva de conceito, sem implementação completa (Passo 12) — [`docs/monitoramento_deriva_conceito.md`](docs/monitoramento_deriva_conceito.md)
+- [x] Matriz de comparação entre modelos e estratégias de balanceamento sobre o dataset real (Passo 8) — [`results/comparacao_modelos.csv`](results/comparacao_modelos.csv)
+- [x] Relatório final, com resultados reais preenchidos (Passo 16) — [`docs/relatorio_final.md`](docs/relatorio_final.md)
