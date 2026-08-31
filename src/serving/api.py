@@ -81,10 +81,16 @@ def health():
     return {"status": "ok"}
 
 
+# O modelo é treinado com as colunas na ordem do CSV original
+# (Time, V1..V28, Amount), diferente da ordem de declaração do
+# schema Pydantic acima — por isso a ordem é explícita aqui.
+FEATURE_ORDER = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
+
+
 @app.post("/predict", response_model=PredictionResponse)
 def predict(transaction: Transaction):
     model = get_model()
-    features = [[getattr(transaction, name) for name in Transaction.model_fields]]
+    features = [[getattr(transaction, name) for name in FEATURE_ORDER]]
     fraud_probability = float(model.predict_proba(features)[0][1])
     return PredictionResponse(
         fraud_probability=fraud_probability,
