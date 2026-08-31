@@ -1,0 +1,44 @@
+# Configuração central do projeto: caminhos e hiperparâmetros
+# mantidos fora do código-fonte.
+
+paths:
+  raw_data: "data/raw/creditcard.csv"
+  processed_train: "data/processed/train.parquet"
+  processed_test: "data/processed/test.parquet"
+  model_output_dir: "models/"
+
+split:
+  # fração dos dados (ordenados por tempo) reservada para teste
+  test_size: 0.2
+  time_column: "Time"
+  target_column: "Class"
+
+balancing:
+  strategy: "class_weight"  # opções: class_weight, smote, isolation_forest
+  smote:
+    k_neighbors: 5
+    random_state: 42
+
+model:
+  logistic_regression:
+    class_weight: "balanced"
+    max_iter: 1000
+    random_state: 42
+  lightgbm:
+    n_estimators: 500
+    learning_rate: 0.05
+    num_leaves: 31
+    random_state: 42
+  isolation_forest:
+    n_estimators: 200
+    contamination: 0.0017
+    random_state: 42
+
+cost_model:
+  # premissas ilustrativas para o custo esperado por transação (passo 9 do guia)
+  false_negative_cost: 120.0
+  false_positive_cost: 5.0
+
+mlflow:
+  tracking_uri: "mlruns"
+  experiment_name: "fraud-detection"
