@@ -38,14 +38,14 @@
     "class_weight": "{0: 0.5009167736602353, 1: 273.1954436450839}",
     "colsample_bytree": "1.0",
     "importance_type": "split",
-    "learning_rate": "0.05",
+    "learning_rate": "0.03512024281587762",
     "max_depth": "-1",
-    "min_child_samples": "20",
+    "min_child_samples": "63",
     "min_child_weight": "0.001",
     "min_split_gain": "0.0",
-    "n_estimators": "500",
+    "n_estimators": "333",
     "n_jobs": "None",
-    "num_leaves": "31",
+    "num_leaves": "30",
     "objective": "None",
     "random_state": "42",
     "reg_alpha": "0.0",
@@ -54,6 +54,16 @@
     "subsample_for_bin": "200000",
     "subsample_freq": "0"
   },
+  "hyperparameter_tuning": {
+    "n_trials": 15,
+    "best_cv_pr_auc": 0.8529177912684555,
+    "tuned_params": {
+      "n_estimators": 333,
+      "learning_rate": 0.03512024281587762,
+      "num_leaves": 30,
+      "min_child_samples": 63
+    }
+  },
   "split": {
     "type": "temporal",
     "time_column": "Time",
@@ -61,16 +71,16 @@
     "threshold_used_for_expected_cost": 0.5
   },
   "metrics_on_test": {
-    "pr_auc": 0.808535910321664,
-    "expected_cost": 0.04257224114321829
+    "pr_auc": 0.8044174485667349,
+    "expected_cost": 0.03686668305185913
   },
   "dataset": {
     "source": "Kaggle - mlg-ulb/creditcardfraud",
     "n_rows": 284807,
     "n_fraud": 492
   },
-  "trained_at_utc": "2026-08-31T22:04:33.163682+00:00",
-  "git_commit": "a4fa62ac06febbe478af322b99b9b8110d7d3956",
+  "trained_at_utc": "2026-08-31T22:32:01.419453+00:00",
+  "git_commit": "5f8d68845cbb337516ad890954b9a680126ee831",
   "library_versions": {
     "python": "3.12.4",
     "scikit_learn": "1.5.1",
