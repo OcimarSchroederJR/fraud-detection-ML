@@ -10,11 +10,19 @@ import time
 import numpy as np
 
 
-def measure_single_transaction_latency(model, X, n_repeats: int = 1) -> dict:
-    """Mede a latência de model.predict_proba uma linha por vez.
+def measure_single_transaction_latency(model, X, n_repeats: int = 1, predict_fn=None) -> dict:
+    """Mede a latência de inferência uma linha por vez.
+
+    `predict_fn` recebe (model, row) e por padrão chama
+    `model.predict_proba(row)`. Modelos sem predict_proba (como
+    IsolationForest) podem passar uma função própria, por exemplo
+    `lambda m, row: m.decision_function(row)`.
 
     Retorna um dicionário com média, mediana, p95 e p99, em milissegundos.
     """
+    if predict_fn is None:
+        predict_fn = lambda m, row: m.predict_proba(row)
+
     X_values = np.asarray(X)
     latencies_ms = []
 
@@ -22,7 +30,7 @@ def measure_single_transaction_latency(model, X, n_repeats: int = 1) -> dict:
         for i in range(len(X_values)):
             row = X_values[i : i + 1]
             start = time.perf_counter()
-            model.predict_proba(row)
+            predict_fn(model, row)
             elapsed_ms = (time.perf_counter() - start) * 1000
             latencies_ms.append(elapsed_ms)
 
@@ -35,9 +43,15 @@ def measure_single_transaction_latency(model, X, n_repeats: int = 1) -> dict:
     }
 
 
-def compare_models_latency(models: dict, X, n_repeats: int = 1) -> dict:
+def compare_models_latency(models: dict, X, n_repeats: int = 1, predict_fns: dict = None) -> dict:
     """Compara a latência de inferência transação a transação entre modelos.
 
-    `models` é um dicionário {nome: modelo_treinado}.
+    `models` é um dicionário {nome: modelo_treinado}. `predict_fns`,
+    opcional, é um dicionário {nome: função} para modelos que não
+    expõem predict_proba (ver measure_single_transaction_latency).
     """
-    return {name: measure_single_transaction_latency(model, X, n_repeats) for name, model in models.items()}
+    predict_fns = predict_fns or {}
+    return {
+        name: measure_single_transaction_latency(model, X, n_repeats, predict_fns.get(name))
+        for name, model in models.items()
+    }
