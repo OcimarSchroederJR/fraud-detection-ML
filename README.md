@@ -1,5 +1,7 @@
 # fraud-detection-ML
 
+[![Testes](https://github.com/OcimarSchroederJR/fraud-detection-ML/actions/workflows/tests.yml/badge.svg)](https://github.com/OcimarSchroederJR/fraud-detection-ML/actions/workflows/tests.yml)
+
 Detecção de fraude em transações de cartão de crédito, com engenharia de pipeline para dados extremamente desbalanceados.
 
 ## Sobre o projeto
