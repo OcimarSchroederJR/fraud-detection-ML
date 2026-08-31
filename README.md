@@ -17,9 +17,28 @@ O foco do projeto não é apenas treinar um classificador, mas explorar as decis
 - Serviço de inferência leve via FastAPI, empacotado com Docker.
 - Interpretabilidade via SHAP.
 
+## Resultados
+
+Comparação real entre os 3 modelos e as 2 estratégias de balanceamento, nas divisões temporal e aleatória dos dados (números completos e discussão em [`docs/relatorio_final.md`](docs/relatorio_final.md)):
+
+![PR-AUC por modelo, balanceamento e divisão](results/figures/pr_auc_comparacao.png)
+
+![Latência p95 por modelo](results/figures/latencia_comparacao.png)
+
+O Isolation Forest (detecção de anomalia, sem rótulos de fraude no treino) fica muito atrás dos modelos supervisionados em PR-AUC e é o mais lento dos três — evidência de que, neste dataset, fraude tem estrutura própria que a detecção de anomalia não-supervisionada não captura bem.
+
+## Dashboard interativo
+
+Um dashboard em Streamlit permite testar o modelo treinado com uma transação real (sorteada do dataset) ou preenchida manualmente, além de visualizar a tabela de resultados acima interativamente:
+
+```bash
+streamlit run dashboard/app.py
+```
+
 ## Estrutura do repositório
 
 ```
+dashboard/        # dashboard interativo (Streamlit), separado do serving de produção
 data/
   raw/            # dados brutos (não versionados)
   processed/      # dados processados (não versionados)
@@ -31,8 +50,10 @@ src/
   train/          # treino dos modelos
   evaluation/     # métricas e avaliação
   serving/        # código de inferência (API)
-tests/            # testes automatizados, espelhando src/
+tests/            # testes automatizados, espelhando src/ e dashboard/
 config/           # hiperparâmetros e caminhos
+results/          # métricas e figuras geradas pelos scripts de avaliação
+docs/             # guia do projeto, relatório final e discussões
 ```
 
 ## Fonte de dados
@@ -58,8 +79,14 @@ python -m src.evaluation.run_comparison
 # ranking de importância via SHAP (passo 14)
 python -m src.evaluation.run_shap_report
 
+# regenera as figuras de comparação usadas neste README
+python -m src.evaluation.generate_report_charts
+
 # serviço de inferência
 uvicorn src.serving.api:app --reload
+
+# dashboard interativo
+streamlit run dashboard/app.py
 ```
 
 ## Status
@@ -77,3 +104,5 @@ uvicorn src.serving.api:app --reload
 - [x] Discussão de monitoramento e deriva de conceito, sem implementação completa (Passo 12) — [`docs/monitoramento_deriva_conceito.md`](docs/monitoramento_deriva_conceito.md)
 - [x] Matriz de comparação entre modelos e estratégias de balanceamento sobre o dataset real (Passo 8) — [`results/comparacao_modelos.csv`](results/comparacao_modelos.csv)
 - [x] Relatório final, com resultados reais preenchidos (Passo 16) — [`docs/relatorio_final.md`](docs/relatorio_final.md)
+- [x] CI no GitHub Actions rodando a suíte de testes a cada push/PR
+- [x] Dashboard interativo em Streamlit — [`dashboard/app.py`](dashboard/app.py)
