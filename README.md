@@ -27,9 +27,13 @@ Comparação real entre os 3 modelos e as 2 estratégias de balanceamento, nas d
 
 O Isolation Forest (detecção de anomalia, sem rótulos de fraude no treino) fica muito atrás dos modelos supervisionados em PR-AUC e é o mais lento dos três — evidência de que, neste dataset, fraude tem estrutura própria que a detecção de anomalia não-supervisionada não captura bem.
 
+## Modelo treinado
+
+Um modelo LightGBM já treinado (PR-AUC 0,81 na divisão temporal) vem versionado em [`models/model.joblib`](models/model.joblib), com as condições exatas do treino documentadas em [`models/model_metadata.json`](models/model_metadata.json) (hiperparâmetros, estratégia de balanceamento, divisão usada, métricas no teste, commit e versões das bibliotecas). Isso permite rodar a API e o dashboard sem precisar baixar o dataset nem treinar nada primeiro — só quem quiser reproduzir o treino ou testar outra estratégia precisa de `data/raw/creditcard.csv`.
+
 ## Dashboard interativo
 
-Um dashboard em Streamlit permite testar o modelo treinado com uma transação real (sorteada do dataset) ou preenchida manualmente, além de visualizar a tabela de resultados acima interativamente:
+Um dashboard em Streamlit permite testar o modelo já treinado com uma transação real (sorteada do dataset, se disponível) ou preenchida manualmente, além de visualizar a tabela de resultados acima interativamente:
 
 ```bash
 streamlit run dashboard/app.py
@@ -58,7 +62,7 @@ docs/             # guia do projeto, relatório final e discussões
 
 ## Fonte de dados
 
-Dataset: [Credit Card Fraud Detection](https://www.kaggle.com/mlg-ulb/creditcardfraud) (ULB Machine Learning Group / Worldline), licença Database Contents License. Baixe o CSV e salve-o em `data/raw/creditcard.csv` antes de rodar o pipeline de treino ou o notebook de análise exploratória.
+Dataset: [Credit Card Fraud Detection](https://www.kaggle.com/mlg-ulb/creditcardfraud) (ULB Machine Learning Group / Worldline), licença Database Contents License. Necessário apenas para retreinar o modelo ou rodar o notebook de análise exploratória — baixe o CSV e salve-o em `data/raw/creditcard.csv`.
 
 ## Como rodar
 
@@ -70,7 +74,7 @@ pip install -r requirements.txt
 # testes automatizados
 pytest
 
-# treino do modelo (requer data/raw/creditcard.csv)
+# retreina o modelo do zero (opcional — já vem um treinado em models/, requer data/raw/creditcard.csv)
 python -m src.train.train_pipeline --model lightgbm
 
 # matriz de comparação entre modelos e estratégias de balanceamento (passo 8)
@@ -106,3 +110,4 @@ streamlit run dashboard/app.py
 - [x] Relatório final, com resultados reais preenchidos (Passo 16) — [`docs/relatorio_final.md`](docs/relatorio_final.md)
 - [x] CI no GitHub Actions rodando a suíte de testes a cada push/PR
 - [x] Dashboard interativo em Streamlit — [`dashboard/app.py`](dashboard/app.py)
+- [x] Modelo treinado versionado com metadados de reprodutibilidade — [`models/model_metadata.json`](models/model_metadata.json)
