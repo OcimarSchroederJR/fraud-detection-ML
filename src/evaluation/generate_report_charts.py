@@ -49,8 +49,8 @@ GRID = "#e1e0d9"
 SURFACE = "#fcfcfb"
 
 
-def _load_results() -> pd.DataFrame:
-    df = pd.read_csv(RESULTS_CSV)
+def _load_results(csv_path: Path = RESULTS_CSV) -> pd.DataFrame:
+    df = pd.read_csv(csv_path)
     df["rotulo"] = df["model"].map(MODEL_LABELS) + " (" + df["balancing"].map(BALANCING_LABELS) + ")"
     df["cor"] = df["model"].map(MODEL_COLORS)
     return df
