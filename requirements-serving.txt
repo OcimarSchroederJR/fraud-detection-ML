@@ -1,0 +1,11 @@
+# Dependências mínimas do serviço de inferência (src/serving/api.py).
+# Deliberadamente separado de requirements.txt: a imagem de produção não
+# deve carregar mlflow, optuna, shap, streamlit, matplotlib etc., que só
+# são usados em treino, avaliação e no dashboard de demonstração.
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.5.1
+lightgbm==4.5.0
+pyyaml==6.0.2
+fastapi==0.112.0
+uvicorn==0.30.5
