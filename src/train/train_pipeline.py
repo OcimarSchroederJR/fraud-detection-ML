@@ -23,6 +23,7 @@ from src.ingestion.load_data import load_config, load_raw_transactions
 from src.preprocessing.schema import validate_transactions
 from src.preprocessing.split import temporal_split
 from src.train.models import build_lightgbm, build_logistic_regression
+from src.train.tune import run_study
 
 FEATURE_COLUMNS_TEMPLATE = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
 TARGET_COLUMN = "Class"
@@ -37,7 +38,7 @@ def _current_git_commit():
         return None
 
 
-def run(config_path: Path = None, model_name: str = "lightgbm"):
+def run(config_path: Path = None, model_name: str = "lightgbm", tune: bool = False, n_trials: int = 15):
     config = load_config(config_path) if config_path else load_config()
 
     df = load_raw_transactions(config_path) if config_path else load_raw_transactions()
@@ -52,6 +53,21 @@ def run(config_path: Path = None, model_name: str = "lightgbm"):
     X_train, y_train = train_df[FEATURE_COLUMNS_TEMPLATE], train_df[TARGET_COLUMN]
     X_test, y_test = test_df[FEATURE_COLUMNS_TEMPLATE], test_df[TARGET_COLUMN]
 
+    tuning_info = None
+    if tune and model_name == "lightgbm":
+        study = run_study(X_train, y_train, n_trials=n_trials, n_splits=3)
+        tuning_info = {
+            "n_trials": n_trials,
+            "best_cv_pr_auc": study.best_value,
+            "tuned_params": study.best_params,
+        }
+
+    def build_lgbm():
+        model = build_lightgbm(config)
+        if tuning_info:
+            model.set_params(**tuning_info["tuned_params"])
+        return model
+
     strategy = config["balancing"]["strategy"]
     if strategy == "smote":
         X_train, y_train = apply_smote(
@@ -60,11 +76,11 @@ def run(config_path: Path = None, model_name: str = "lightgbm"):
             k_neighbors=config["balancing"]["smote"]["k_neighbors"],
             random_state=config["balancing"]["smote"]["random_state"],
         )
-        model = build_lightgbm(config) if model_name == "lightgbm" else build_logistic_regression(config)
+        model = build_lgbm() if model_name == "lightgbm" else build_logistic_regression(config)
     elif strategy == "class_weight":
         weights = class_weight_dict(y_train)
         if model_name == "lightgbm":
-            model = build_lightgbm(config)
+            model = build_lgbm()
             model.set_params(class_weight=weights)
         else:
             model = build_logistic_regression(config)
@@ -89,6 +105,10 @@ def run(config_path: Path = None, model_name: str = "lightgbm"):
     with mlflow.start_run():
         mlflow.log_param("model", model_name)
         mlflow.log_param("balancing_strategy", strategy)
+        mlflow.log_param("hyperparameter_tuning", tune)
+        if tuning_info:
+            mlflow.log_params({f"tuned_{k}": v for k, v in tuning_info["tuned_params"].items()})
+            mlflow.log_metric("tuning_best_cv_pr_auc", tuning_info["best_cv_pr_auc"])
         mlflow.log_metrics(metrics)
 
     model_output_dir = Path(config["paths"]["model_output_dir"])
@@ -106,6 +126,7 @@ def run(config_path: Path = None, model_name: str = "lightgbm"):
         "balancing_strategy": strategy,
         "feature_order": FEATURE_COLUMNS_TEMPLATE,
         "hyperparameters": {k: str(v) for k, v in model.get_params().items()},
+        "hyperparameter_tuning": tuning_info,
         "split": {
             "type": "temporal",
             "time_column": config["split"]["time_column"],
@@ -131,6 +152,12 @@ def run(config_path: Path = None, model_name: str = "lightgbm"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Treina o modelo de detecção de fraude.")
     parser.add_argument("--model", default="lightgbm", choices=["lightgbm", "logistic_regression"])
+    parser.add_argument(
+        "--tune",
+        action="store_true",
+        help="Ajusta os hiperparâmetros do LightGBM com Optuna antes do treino final (passo 10 do guia).",
+    )
+    parser.add_argument("--n-trials", type=int, default=15, help="Número de tentativas do Optuna quando --tune é usado.")
     args = parser.parse_args()
-    resulting_metrics = run(model_name=args.model)
+    resulting_metrics = run(model_name=args.model, tune=args.tune, n_trials=args.n_trials)
     print(resulting_metrics)
