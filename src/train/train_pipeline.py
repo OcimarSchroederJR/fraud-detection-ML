@@ -10,7 +10,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import joblib
@@ -18,15 +18,15 @@ import mlflow
 import sklearn
 
 from src.balancing.strategies import apply_smote, class_weight_dict
-from src.evaluation.metrics import expected_cost, pr_auc
+from src.evaluation.metrics import best_threshold_by_cost, expected_cost, pr_auc
+from src.features import FEATURE_ORDER, TARGET_COLUMN
 from src.ingestion.load_data import load_config, load_raw_transactions
 from src.preprocessing.schema import validate_transactions
-from src.preprocessing.split import temporal_split
+from src.preprocessing.split import temporal_train_val_test_split
 from src.train.models import build_lightgbm, build_logistic_regression
 from src.train.tune import run_study
 
-FEATURE_COLUMNS_TEMPLATE = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
-TARGET_COLUMN = "Class"
+FEATURE_COLUMNS_TEMPLATE = FEATURE_ORDER
 
 
 def _current_git_commit():
@@ -38,19 +38,22 @@ def _current_git_commit():
         return None
 
 
-def run(config_path: Path = None, model_name: str = "lightgbm", tune: bool = False, n_trials: int = 15):
+def run(config_path: Path | None = None, model_name: str = "lightgbm", tune: bool = False, n_trials: int = 15):
     config = load_config(config_path) if config_path else load_config()
 
     df = load_raw_transactions(config_path) if config_path else load_raw_transactions()
     df = validate_transactions(df)
 
-    train_df, test_df = temporal_split(
+    validation_size = config["split"].get("validation_size", 0.2)
+    train_df, val_df, test_df = temporal_train_val_test_split(
         df,
         time_column=config["split"]["time_column"],
         test_size=config["split"]["test_size"],
+        validation_size=validation_size,
     )
 
     X_train, y_train = train_df[FEATURE_COLUMNS_TEMPLATE], train_df[TARGET_COLUMN]
+    X_val, y_val = val_df[FEATURE_COLUMNS_TEMPLATE], val_df[TARGET_COLUMN]
     X_test, y_test = test_df[FEATURE_COLUMNS_TEMPLATE], test_df[TARGET_COLUMN]
 
     tuning_info = None
@@ -89,15 +92,29 @@ def run(config_path: Path = None, model_name: str = "lightgbm", tune: bool = Fal
 
     model.fit(X_train, y_train)
 
+    fn_cost = config["cost_model"]["false_negative_cost"]
+    fp_cost = config["cost_model"]["false_positive_cost"]
+
+    # O limiar de decisão é escolhido no conjunto de validação (minimizando
+    # o custo esperado), nunca no teste — usar o teste para essa escolha
+    # vazaria informação da avaliação final para uma decisão de modelo.
+    val_scores = model.predict_proba(X_val)[:, 1]
+    decision_threshold, val_expected_cost = best_threshold_by_cost(
+        y_val, val_scores, false_negative_cost=fn_cost, false_positive_cost=fp_cost
+    )
+    decision_threshold = float(decision_threshold)
+
     y_scores = model.predict_proba(X_test)[:, 1]
     metrics = {
         "pr_auc": pr_auc(y_test, y_scores),
         "expected_cost": expected_cost(
             y_test,
-            (y_scores >= 0.5).astype(int),
-            false_negative_cost=config["cost_model"]["false_negative_cost"],
-            false_positive_cost=config["cost_model"]["false_positive_cost"],
+            (y_scores >= decision_threshold).astype(int),
+            false_negative_cost=fn_cost,
+            false_positive_cost=fp_cost,
         ),
+        "decision_threshold": decision_threshold,
+        "validation_expected_cost": float(val_expected_cost),
     }
 
     mlflow.set_tracking_uri(config["mlflow"]["tracking_uri"])
@@ -125,21 +142,25 @@ def run(config_path: Path = None, model_name: str = "lightgbm", tune: bool = Fal
         "model_name": model_name,
         "balancing_strategy": strategy,
         "feature_order": FEATURE_COLUMNS_TEMPLATE,
+        "decision_threshold": decision_threshold,
         "hyperparameters": {k: str(v) for k, v in model.get_params().items()},
         "hyperparameter_tuning": tuning_info,
         "split": {
             "type": "temporal",
             "time_column": config["split"]["time_column"],
             "test_size": config["split"]["test_size"],
-            "threshold_used_for_expected_cost": 0.5,
+            "validation_size": validation_size,
+            "threshold_used_for_expected_cost": decision_threshold,
+            "threshold_selection": "custo esperado mínimo no conjunto de validação",
         },
+        "cost_model": {"false_negative_cost": fn_cost, "false_positive_cost": fp_cost},
         "metrics_on_test": metrics,
         "dataset": {
             "source": "Kaggle - mlg-ulb/creditcardfraud",
-            "n_rows": int(len(df)),
+            "n_rows": len(df),
             "n_fraud": int(df[TARGET_COLUMN].sum()),
         },
-        "trained_at_utc": datetime.now(timezone.utc).isoformat(),
+        "trained_at_utc": datetime.now(UTC).isoformat(),
         "git_commit": _current_git_commit(),
         "library_versions": versions,
     }
