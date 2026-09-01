@@ -1,6 +1,8 @@
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import IsolationForest
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from src.train.models import build_isolation_forest, build_lightgbm, build_logistic_regression
 
@@ -13,11 +15,15 @@ _CONFIG = {
 }
 
 
-def test_build_logistic_regression_returns_configured_estimator():
+def test_build_logistic_regression_returns_scaled_pipeline():
     model = build_logistic_regression(_CONFIG)
-    assert isinstance(model, LogisticRegression)
-    assert model.class_weight == "balanced"
-    assert model.random_state == 42
+    assert isinstance(model, Pipeline)
+    assert isinstance(model.named_steps["scaler"], StandardScaler)
+
+    clf = model.named_steps["clf"]
+    assert isinstance(clf, LogisticRegression)
+    assert clf.class_weight == "balanced"
+    assert clf.random_state == 42
 
 
 def test_build_lightgbm_returns_configured_estimator():
