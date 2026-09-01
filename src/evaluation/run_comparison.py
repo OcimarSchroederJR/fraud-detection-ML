@@ -40,8 +40,11 @@ def _fit_supervised(model, X_train, y_train, strategy, config):
         model.fit(X_bal, y_bal)
     elif strategy == "class_weight":
         weights = class_weight_dict(y_train)
-        if "class_weight" in model.get_params():
-            model.set_params(class_weight=weights)
+        params = model.get_params()
+        # o estimador pode ser cru (class_weight) ou um Pipeline (clf__class_weight)
+        param_name = next((p for p in ("class_weight", "clf__class_weight") if p in params), None)
+        if param_name is not None:
+            model.set_params(**{param_name: weights})
         model.fit(X_train, y_train)
     else:
         raise ValueError(f"Estratégia desconhecida: {strategy}")
