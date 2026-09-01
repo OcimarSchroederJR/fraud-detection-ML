@@ -16,6 +16,10 @@ def _objective(trial: optuna.Trial, X, y, n_splits: int) -> float:
         "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
         "num_leaves": trial.suggest_int("num_leaves", 7, 63),
         "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
+        # a busca precisa refletir o tratamento de desbalanceamento usado no
+        # treino final; sem isto os hiperparâmetros são otimizados para um
+        # cenário (sem ponderação) diferente do que será de fato treinado
+        "class_weight": "balanced",
         "verbosity": -1,
         "random_state": 42,
     }
@@ -25,8 +29,15 @@ def _objective(trial: optuna.Trial, X, y, n_splits: int) -> float:
     return scores.mean()
 
 
-def run_study(X, y, n_trials: int = 30, n_splits: int = 3, direction: str = "maximize") -> optuna.Study:
-    """Roda a busca bayesiana maximizando PR-AUC via validação cruzada."""
-    study = optuna.create_study(direction=direction)
+def run_study(
+    X, y, n_trials: int = 30, n_splits: int = 3, direction: str = "maximize", seed: int = 42
+) -> optuna.Study:
+    """Roda a busca bayesiana maximizando PR-AUC via validação cruzada.
+
+    O sampler é semeado para que a busca seja reprodutível — os metadados
+    do modelo alegam reprodutibilidade do treino, o que só vale se a
+    escolha de hiperparâmetros também for determinística.
+    """
+    study = optuna.create_study(direction=direction, sampler=optuna.samplers.TPESampler(seed=seed))
     study.optimize(lambda trial: _objective(trial, X, y, n_splits), n_trials=n_trials)
     return study

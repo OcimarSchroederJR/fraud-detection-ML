@@ -2,7 +2,10 @@ line-length = 120
 target-version = "py312"
 
 [lint]
-select = ["E", "F", "I", "W"]
+# E/F/W: erros e estilo básicos; I: ordenação de imports; B: bugbear
+# (armadilhas comuns); UP: sintaxe moderna de Python; SIM: simplificações;
+# RUF: regras específicas do ruff.
+select = ["E", "F", "I", "W", "B", "UP", "SIM", "RUF"]
 ignore = ["E501"]
 
 [lint.isort]

@@ -89,7 +89,7 @@ def _horizontal_bars(ax, split_df, value_col, value_fmt, ascending, xlim=None):
     ax.set_yticklabels(split_df["rotulo"], color=INK, fontsize=10)
 
     x_max = xlim[1] if xlim else split_df[value_col].max()
-    for y, value in zip(y_pos, split_df[value_col]):
+    for y, value in zip(y_pos, split_df[value_col], strict=True):
         ax.text(
             value + x_max * 0.02,
             y,
@@ -116,7 +116,7 @@ def plot_pr_auc(df: pd.DataFrame, output_path: Path):
     )
     fig.text(0.5, 0.90, "PR-AUC, de 0 a 1 — quanto maior, melhor", ha="center", fontsize=10, color=INK_SECONDARY)
 
-    for ax, (split_key, split_label) in zip(axes, SPLIT_LABELS.items()):
+    for ax, (split_key, split_label) in zip(axes, SPLIT_LABELS.items(), strict=True):
         split_df = df[df["split"] == split_key]
         _horizontal_bars(ax, split_df, "pr_auc", lambda v: f"{v:.2f}", ascending=True, xlim=(0, 1.05))
         ax.set_title(split_label, fontsize=11, color=INK_SECONDARY, pad=10)
@@ -141,7 +141,7 @@ def plot_latency(df: pd.DataFrame, output_path: Path):
     )
 
     shared_xlim = (0, df["latency_p95_ms"].max() * 1.4)
-    for ax, (split_key, split_label) in zip(axes, SPLIT_LABELS.items()):
+    for ax, (split_key, split_label) in zip(axes, SPLIT_LABELS.items(), strict=True):
         split_df = df[df["split"] == split_key]
         _horizontal_bars(ax, split_df, "latency_p95_ms", lambda v: f"{v:.2f} ms", ascending=False, xlim=shared_xlim)
         ax.set_title(split_label, fontsize=11, color=INK_SECONDARY, pad=10)
