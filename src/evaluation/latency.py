@@ -45,7 +45,7 @@ def measure_single_transaction_latency(model, X, n_repeats: int = 1, predict_fn=
     }
 
 
-def compare_models_latency(models: dict, X, n_repeats: int = 1, predict_fns: dict = None) -> dict:
+def compare_models_latency(models: dict, X, n_repeats: int = 1, predict_fns: dict | None = None) -> dict:
     """Compara a latência de inferência transação a transação entre modelos.
 
     `models` é um dicionário {nome: modelo_treinado}. `predict_fns`,

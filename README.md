@@ -33,6 +33,32 @@ O Isolation Forest (detecção de anomalia, sem rótulos de fraude no treino) fi
 
 Um modelo LightGBM já treinado (PR-AUC 0,81 na divisão temporal) vem versionado em [`models/model.joblib`](models/model.joblib), com as condições exatas do treino documentadas em [`models/model_metadata.json`](models/model_metadata.json) (hiperparâmetros, estratégia de balanceamento, divisão usada, métricas no teste, commit e versões das bibliotecas). Isso permite rodar a API e o dashboard sem precisar baixar o dataset nem treinar nada primeiro — só quem quiser reproduzir o treino ou testar outra estratégia precisa de `data/raw/creditcard.csv`.
 
+## Limiar de decisão
+
+O modelo devolve uma probabilidade; a decisão fraude/legítima depende do limiar aplicado a ela. O limiar não é fixado em 0,5: durante o treino ele é escolhido no **conjunto de validação** (separado do teste) como o valor que minimiza o custo esperado por transação, dadas as premissas de custo em [`config/config.yaml`](config/config.yaml) (`false_negative_cost`, `false_positive_cost`). O valor escolhido é gravado em `models/model_metadata.json` (`decision_threshold`) e é o que a API e o dashboard usam por padrão. Na API, a variável de ambiente `DECISION_THRESHOLD` tem precedência, se definida.
+
+## API de inferência
+
+```bash
+uvicorn src.serving.api:app --reload
+```
+
+O modelo é carregado no startup. `GET /health` é liveness (processo de pé); `GET /ready` é readiness (modelo carregado). Exemplo de chamada:
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"Time":0,"Amount":149.62,"V1":-1.36,"V2":-0.07,"V3":2.54,"V4":1.38,"V5":-0.34,
+       "V6":0.46,"V7":0.24,"V8":0.10,"V9":0.36,"V10":0.09,"V11":-0.55,"V12":-0.62,
+       "V13":-0.99,"V14":-0.31,"V15":1.47,"V16":-0.47,"V17":0.21,"V18":0.03,"V19":0.40,
+       "V20":0.25,"V21":-0.02,"V22":0.28,"V23":-0.11,"V24":0.07,"V25":0.13,"V26":-0.19,
+       "V27":0.13,"V28":-0.02}'
+```
+
+```json
+{"fraud_probability": 0.0123, "is_fraud": false, "threshold": 0.47}
+```
+
 ## Dashboard interativo
 
 Um dashboard em Streamlit permite testar o modelo já treinado com uma transação real (sorteada do dataset, se disponível) ou preenchida manualmente, além de visualizar a tabela de resultados acima interativamente:
