@@ -16,13 +16,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import json
+
 import joblib
 import pandas as pd
 import streamlit as st
 
+from src.features import FEATURE_ORDER, feature_frame
 from src.ingestion.load_data import load_config, load_raw_transactions
-
-FEATURE_ORDER = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
 
 st.set_page_config(page_title="Detecção de fraude", page_icon="💳", layout="wide")
 
@@ -47,6 +48,19 @@ def get_sample_transactions(n: int = 200):
     except FileNotFoundError:
         return None
     return df.sample(n=min(n, len(df)), random_state=None)
+
+
+@st.cache_data
+def get_default_threshold(model_dir: str) -> float:
+    """Limiar escolhido no treino (custo esperado mínimo na validação),
+    lido dos metadados do modelo; 0.5 se não houver metadados."""
+    path = Path(model_dir) / "model_metadata.json"
+    if not path.exists():
+        return 0.5
+    try:
+        return float(json.loads(path.read_text(encoding="utf-8")).get("decision_threshold", 0.5))
+    except (OSError, ValueError):
+        return 0.5
 
 
 @st.cache_data
@@ -129,8 +143,11 @@ def main():
                 "`python -m src.train.train_pipeline` antes de usar o dashboard."
             )
         else:
-            threshold = st.slider("Limiar de decisão", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
-            features = [[st.session_state["features"][name] for name in FEATURE_ORDER]]
+            default_threshold = get_default_threshold(str(PROJECT_ROOT / config["paths"]["model_output_dir"]))
+            threshold = st.slider(
+                "Limiar de decisão", min_value=0.0, max_value=1.0, value=default_threshold, step=0.01
+            )
+            features = feature_frame(st.session_state["features"])
             fraud_probability = float(model.predict_proba(features)[0][1])
 
             st.metric("Probabilidade de fraude", f"{fraud_probability:.2%}")
